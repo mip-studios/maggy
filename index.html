@@ -2,22 +2,36 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
-    <title>Converge MVP Test</title>
+    <title>Converge MVP Test - Gecorrigeerd</title>
     <style>
         body {
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             height: 100vh;
             margin: 0;
             background-color: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
             overflow: hidden;
+        }
+        #status-area {
+            margin-bottom: 20px;
+            font-size: 1.2em;
+            color: #00ff88;
+        }
+        #score-area {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 1.5em;
         }
         #game-container {
             position: relative;
-            width: 500px; /* Stel dit in als uw 10x10 raster, 50px per eenheid */
+            width: 500px;
             height: 500px;
-            border: 1px solid #333; /* Onzichtbaar raster */
+            border: 1px solid #333;
             background-color: #111;
         }
         .dot {
@@ -26,11 +40,11 @@
             height: 20px;
             border-radius: 50%;
             cursor: pointer;
-            transition: background-color 0.1s;
+            transition: background-color 0.1s, transform 0.1s; /* Voor visuele feedback */
             z-index: 10;
         }
         #dot1 {
-            background-color: #00ff88; /* Groen */
+            background-color: #00ff88;
         }
         .footprint {
             position: absolute;
@@ -45,6 +59,8 @@
 </head>
 <body>
 
+<div id="score-area">Cyclus Voltooid: <span id="score-value">0</span></div>
+<div id="status-area">Wacht op beweging...</div>
 <div id="game-container">
     <div id="dot1" class="dot"></div>
 </div>
@@ -52,12 +68,15 @@
 <script>
     const container = document.getElementById('game-container');
     const dot1 = document.getElementById('dot1');
-    const gridSize = 10; // 10x10 grid
-    const unitSize = container.offsetWidth / gridSize; // 50px per stap
+    const scoreValue = document.getElementById('score-value');
+    const statusArea = document.getElementById('status-area');
+    
+    const gridSize = 10; 
+    const unitSize = container.offsetWidth / gridSize;
+    
     let currentPos1 = { x: 5, y: 5 }; // Start (5, 5)
-
-    // Patroon Definitie (10 stappen Pendelaar - dx, dy)
-    // 1. (+1, +0) R, 2. (0, +1) U, 3. (-1, +0) L, 4. (0, +1) U, ...
+    
+    // Patroon Definitie (10 stappen Pendelaar)
     const pattern1 = [
         { dx: 1, dy: 0 }, { dx: 0, dy: 1 },
         { dx: -1, dy: 0 }, { dx: 0, dy: 1 },
@@ -69,6 +88,11 @@
     let isMoving1 = true;
     let intervalId1;
     let score = 0;
+
+    function updateStatus(message, color = '#00ff88') {
+        statusArea.textContent = message;
+        statusArea.style.color = color;
+    }
 
     // Functie om de visuele positie van de punt bij te werken
     function updateDotPosition(dotElement, gridX, gridY) {
@@ -84,7 +108,6 @@
         const fp = document.createElement('div');
         fp.className = 'footprint';
         container.appendChild(fp);
-        // Plaats de voetafdruk op de x/y coördinaat
         const left = (x * unitSize) - (fp.offsetWidth / 2);
         const top = (y * unitSize) - (fp.offsetHeight / 2);
         fp.style.left = `${left}px`;
@@ -98,7 +121,6 @@
         // Bepaal de volgende stap
         const step = pattern1[stepCount1 % pattern1.length];
         
-        // Bereken de nieuwe positie
         let newX = currentPos1.x + step.dx;
         let newY = currentPos1.y + step.dy;
 
@@ -110,49 +132,61 @@
         updateDotPosition(dot1, currentPos1.x, currentPos1.y);
 
         stepCount1++;
+        updateStatus(`Punt 1 beweegt... Stap: ${stepCount1} van ${pattern1.length}`);
 
-        // Stopt na 10 stappen als er niet geklikt is (de speler faalt de cyclus)
+        // Stopt na 10 stappen als er niet geklikt is
         if (stepCount1 >= pattern1.length) {
             clearInterval(intervalId1);
             isMoving1 = false;
             dot1.style.backgroundColor = '#ff0000'; // Rood: Mislukt!
-            // Hier zou de 'Game Over' of reset logica komen
-            console.log("Punt 1 Mislukt: Cyclus voltooid zonder klik.");
+            updateStatus("MISLUKT: Tijd is om! Probeer opnieuw te starten.", '#ff0000');
         }
     }
 
     // De Klik Handler
     dot1.onclick = function() {
-        if (isMoving1 && stepCount1 > 0 && stepCount1 < pattern1.length) {
-            // Succesvolle klik! Reset de cyclus en markeer de positie.
-            
-            // 1. Plaats de voetafdruk op de positie van de klik
-            placeFootprint(currentPos1.x, currentPos1.y);
+        // De klik is nu altijd geldig als de punt beweegt (isMoving1)
+        if (isMoving1) {
+            // Check of de klik niet op de allerlaatste stap kwam (te laat)
+            if (stepCount1 < pattern1.length) {
+                // Succesvolle klik!
+                
+                // 1. Plaats de voetafdruk
+                placeFootprint(currentPos1.x, currentPos1.y);
 
-            // 2. Reset de bewegingstimer en teller
-            clearInterval(intervalId1);
-            stepCount1 = 0;
-            intervalId1 = setInterval(moveDot1, 500); // Beweeg elke 500ms
+                // 2. Reset de bewegingstimer en teller
+                clearInterval(intervalId1);
+                stepCount1 = 0;
+                intervalId1 = setInterval(moveDot1, 500); // Beweeg elke 500ms
+                updateDotPosition(dot1, currentPos1.x, currentPos1.y); // Reset naar (5,5)
 
-            // 3. Score/Status update (voor later: introductie punt 2)
-            score++;
-            dot1.style.backgroundColor = '#00ff88'; // Blijf groen
-            console.log(`Succesvolle klik! Score: ${score}`);
+                // 3. Score/Status update
+                score++;
+                scoreValue.textContent = score;
+                updateStatus(`SUCCES: Cyclus voltooid! (${score}x)`);
 
-            // **LOGICA VOOR PUNT 2 INTRODUCTIE**
-            if (score === 5) {
-                // Hier zou de functie komen die Punt 2 toevoegt
-                console.log("5 cycli voltooid. Tijd voor Punt 2!");
-                // (Code voor punt 2 komt in de volgende stap)
+                // **LOGICA VOOR PUNT 2 INTRODUCTIE**
+                if (score === 3) { // Nu op 3 voor snellere test
+                    updateStatus("Introductie Punt 2! Maak je klaar.", '#ffaa00');
+                    initializeDot2(); // Roep de nieuwe functie aan
+                }
+            } else {
+                 updateStatus("Klik te laat! De cyclus was al voltooid.", '#ffaa00');
             }
         } else {
-             console.log("Klik te vroeg (op startpositie) of te laat (na 10 stappen).");
+             // Als de beweging gestopt is door falen, reset het spel.
+             currentPos1 = { x: 5, y: 5 };
+             isMoving1 = true;
+             stepCount1 = 0;
+             dot1.style.backgroundColor = '#00ff88';
+             updateDotPosition(dot1, currentPos1.x, currentPos1.y);
+             intervalId1 = setInterval(moveDot1, 500);
+             updateStatus("Punt 1 gereset. Begin nu met klikken!");
         }
     };
 
     // Initialisatie
     updateDotPosition(dot1, currentPos1.x, currentPos1.y);
-    // Start de beweging elke 500 milliseconden (een halve seconde)
     intervalId1 = setInterval(moveDot1, 500);
 </script>
 
