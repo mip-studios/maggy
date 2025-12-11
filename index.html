@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
-    <title>Converge MVP Test - Blokken en Verbeterde Klikbaarheid</title>
+    <title>Converge MVP Test - Blok 2</title>
     <style>
         body {
             display: flex;
@@ -19,7 +19,7 @@
         #status-area {
             margin-bottom: 20px;
             font-size: 1.2em;
-            height: 25px;
+            height: 25px; 
             color: #00ff88;
         }
         #score-area {
@@ -35,20 +35,22 @@
             border: 1px solid #333;
             background-color: #111;
         }
-        /* --- AANGEPAST: Dit is nu een vierkant blok van 40x40px --- */
         .dot {
             position: absolute;
-            width: 40px; /* Groter gemaakt */
-            height: 40px; /* Groter gemaakt */
-            /* border-radius: 50%; <--- Verwijderd om er een vierkant van te maken */
+            width: 40px; 
+            height: 40px; 
             cursor: pointer; 
             transition: background-color 0.1s, transform 0.1s;
-            z-index: 100; /* Z-index sterk verhoogd voor zekerheid */
+            z-index: 100;
+            display: none; /* Standaard verborgen */
         }
         #dot1 {
-            background-color: #00ff88;
+            background-color: #00ff88; /* Groen */
+            display: block; /* Blok 1 is direct zichtbaar */
         }
-        /* --- AANGEPAST: Voetafdrukken zijn nu kleinere vierkantjes --- */
+        #dot2 {
+            background-color: #ffaa00; /* Oranje: NIEUW */
+        }
         .footprint {
             position: absolute;
             width: 15px; 
@@ -76,22 +78,26 @@
 <div id="status-area">Wacht op beweging...</div>
 <div id="game-container">
     <div id="dot1" class="dot"></div>
-</div>
+    <div id="dot2" class="dot"></div> </div>
 <button id="try-again-btn">Try Again</button>
 
 <script>
     const container = document.getElementById('game-container');
     const dot1 = document.getElementById('dot1');
+    const dot2 = document.getElementById('dot2'); // *** NIEUW BLOK 2 ***
     const scoreValue = document.getElementById('score-value');
     const statusArea = document.getElementById('status-area');
     const tryAgainBtn = document.getElementById('try-again-btn');
     
     const gridSize = 10; 
     const unitSize = container.offsetWidth / gridSize;
+    const movementSpeed = 750; // *** AANGEPAST: 500ms -> 750ms ***
     
-    let currentPos1 = { x: 5, y: 5 }; // Start (5, 5)
+    let currentPos1 = { x: 5, y: 5 };
+    let currentPos2 = { x: 0, y: 0 }; // *** NIEUW BLOK 2 ***
     
-    // Patroon Definitie (10 stappen Pendelaar)
+    // --- PATRONEN DEFINITIE ---
+    // Blok 1: Pendelaar
     const pattern1 = [
         { dx: 1, dy: 0 }, { dx: 0, dy: 1 },
         { dx: -1, dy: 0 }, { dx: 0, dy: 1 },
@@ -99,10 +105,24 @@
         { dx: -1, dy: 0 }, { dx: 0, dy: 1 },
         { dx: 1, dy: 0 }, { dx: 0, dy: 1 }
     ];
+    // Blok 2: Spiraal (10 stappen)
+    const pattern2 = [ 
+        { dx: 2, dy: 0 }, { dx: 0, -1 }, 
+        { dx: -1, dy: 0 }, { dx: 0, -1 }, 
+        { dx: -1, dy: 0 }, { dx: 0, 1 }, 
+        { dx: 1, dy: 0 }, { dx: 0, 1 }, 
+        { dx: 1, dy: 0 }, { dx: 0, 0 } // Laatste stap is stilstand
+    ]; // *** NIEUW BLOK 2 PATROON ***
+
     let stepCount1 = 0;
+    let stepCount2 = 0; // *** NIEUW BLOK 2 ***
     let isMoving1 = true;
+    let isMoving2 = false; // *** NIEUW BLOK 2: Start niet direct ***
     let intervalId1;
+    let intervalId2; // *** NIEUW BLOK 2 ***
     let score = 0;
+
+    // --- HELPER FUNCTIES ---
 
     function updateStatus(message, color = '#00ff88') {
         statusArea.textContent = message;
@@ -110,8 +130,6 @@
     }
 
     function updateDotPosition(dotElement, gridX, gridY) {
-        // Coördinaten omrekenen naar pixels (center van de unit)
-        // Let op: dotElement.offsetWidth is nu 40px
         const left = (gridX * unitSize) - (dotElement.offsetWidth / 2);
         const top = (gridY * unitSize) - (dotElement.offsetHeight / 2);
         dotElement.style.left = `${left}px`;
@@ -122,97 +140,155 @@
         const fp = document.createElement('div');
         fp.className = 'footprint';
         container.appendChild(fp);
-        // Voetafdruk op dezelfde coördinaat als het midden van het blok
         const left = (x * unitSize) - (fp.offsetWidth / 2);
         const top = (y * unitSize) - (fp.offsetHeight / 2);
         fp.style.left = `${left}px`;
         fp.style.top = `${top}px`;
     }
 
+    function checkBoundaries(x, y) {
+        x = Math.max(1, Math.min(gridSize, x));
+        y = Math.max(1, Math.min(gridSize, y));
+        return { x: x, y: y };
+    }
+
+    // --- CORE GAME LOGICA ---
+    
+    // Functie voor herstart/initialisatie van Blok 1
     function startDot1Movement() {
         tryAgainBtn.style.display = 'none'; 
         
-        // Reset variabelen
         currentPos1 = { x: 5, y: 5 };
         isMoving1 = true;
         stepCount1 = 0;
         dot1.style.backgroundColor = '#00ff88';
 
-        // Start beweging
         updateDotPosition(dot1, currentPos1.x, currentPos1.y);
         clearInterval(intervalId1); 
-        intervalId1 = setInterval(moveDot1, 500);
+        intervalId1 = setInterval(moveDot1, movementSpeed);
         updateStatus("Blok 1 beweegt. Klik op tijd!", '#00ff88');
     }
 
-    function failDot1() {
-        clearInterval(intervalId1);
-        isMoving1 = false;
-        dot1.style.backgroundColor = '#ff0000'; // Rood: Mislukt!
-        updateStatus("MISLUKT: Tijd is om! Druk op 'Try Again'.", '#ff0000');
-        tryAgainBtn.style.display = 'block'; // Toon de knop
+    // Functie voor initiële start van Blok 2
+    function initializeDot2() {
+        if(isMoving2) return; // Al gestart
+
+        currentPos2 = { x: 2, y: 9 }; // Startpositie Spiraal
+        isMoving2 = true;
+        stepCount2 = 0;
+        dot2.style.backgroundColor = '#ffaa00';
+        dot2.style.display = 'block';
+
+        updateDotPosition(dot2, currentPos2.x, currentPos2.y);
+        intervalId2 = setInterval(moveDot2, movementSpeed);
+        updateStatus("Blok 2 verschenen! Beheer twee blokken.", '#ffaa00');
+    }
+
+    // Functie voor herstart van Blok 2 na succesvolle klik
+    function restartDot2Cycle() {
+        stepCount2 = 0;
+        isMoving2 = true;
+        dot2.style.backgroundColor = '#ffaa00'; 
+        clearInterval(intervalId2);
+        intervalId2 = setInterval(moveDot2, movementSpeed);
     }
 
 
-    // De bewegingslus voor Punt 1
+    // Algemene Faal-logica (nu voor beide blokken)
+    function failGame() {
+        clearInterval(intervalId1);
+        clearInterval(intervalId2);
+        isMoving1 = false;
+        isMoving2 = false;
+        dot1.style.backgroundColor = '#ff0000'; 
+        dot2.style.backgroundColor = '#ff0000'; // Rood
+        updateStatus("MISLUKT: Een van de blokken was te laat! Druk op 'Try Again'.", '#ff0000');
+        tryAgainBtn.style.display = 'block';
+    }
+
+
+    // --- BEWEGINGSLUSSEN ---
+
     function moveDot1() {
         if (!isMoving1) return;
 
         const step = pattern1[stepCount1 % pattern1.length];
         
-        let newX = currentPos1.x + step.dx;
-        let newY = currentPos1.y + step.dy;
-
-        // Controleer op grenzen (blijf binnen 1 en 10)
-        newX = Math.max(1, Math.min(gridSize, newX));
-        newY = Math.max(1, Math.min(gridSize, newY));
-
-        currentPos1 = { x: newX, y: newY };
+        let newPos = checkBoundaries(currentPos1.x + step.dx, currentPos1.y + step.dy);
+        currentPos1 = newPos;
         updateDotPosition(dot1, currentPos1.x, currentPos1.y);
 
         stepCount1++;
-        updateStatus(`Blok 1 beweegt... Stap: ${stepCount1} van ${pattern1.length}`);
+        // updateStatus(`Blok 1: ${stepCount1}, Blok 2: ${stepCount2}`);
 
-        // Als 10 stappen zijn bereikt zonder klik: FAAL
         if (stepCount1 >= pattern1.length) {
-            failDot1();
+            failGame();
         }
     }
 
-    // De Klik Handler (Op het blok)
+    function moveDot2() { // *** NIEUW BLOK 2 BEWEGING ***
+        if (!isMoving2) return;
+
+        const step = pattern2[stepCount2 % pattern2.length];
+        
+        let newPos = checkBoundaries(currentPos2.x + step.dx, currentPos2.y + step.dy);
+        currentPos2 = newPos;
+        updateDotPosition(dot2, currentPos2.x, currentPos2.y);
+
+        stepCount2++;
+        // updateStatus(`Blok 1: ${stepCount1}, Blok 2: ${stepCount2}`);
+
+        if (stepCount2 >= pattern2.length) {
+            failGame();
+        }
+    }
+
+    // --- KLIK HANDLERS ---
+
+    function handleSuccessfulClick(dotElement, currentPos, cycleFinishedMessage) {
+        placeFootprint(currentPos.x, currentPos.y);
+
+        // Hier komt straks de Convergentie/Synergie check!
+        
+        score++;
+        scoreValue.textContent = score;
+        updateStatus(cycleFinishedMessage, '#00ff88');
+
+        // Check of blok 2 gestart moet worden na de klik van blok 1
+        if (dotElement.id === 'dot1' && score === 3 && !isMoving2) { 
+            initializeDot2();
+        }
+    }
+
     dot1.onclick = function() {
-        // We controleren of de punt beweegt en of de speler niet op de startpositie klikte (stap 0)
         if (isMoving1 && stepCount1 > 0 && stepCount1 < pattern1.length) {
-            // Succesvolle klik!
-            
-            placeFootprint(currentPos1.x, currentPos1.y);
-
-            // Reset en start nieuwe cyclus
-            clearInterval(intervalId1);
-            score++;
-            scoreValue.textContent = score;
-            updateStatus(`SUCCES: Cyclus voltooid! (${score}x)`);
-            
-            startDot1Movement(); 
-
-            // **LOGICA VOOR PUNT 2 INTRODUCTIE**
-            if (score === 3) { 
-                updateStatus("Introductie Blok 2! Maak je klaar.", '#ffaa00');
-                // initializeDot2(); // Functie voor blok 2 komt hier
-            }
-        } else if (stepCount1 === 0) {
-            updateStatus("Wacht tot de beweging start voordat u klikt!", '#ffaa00');
-        } else if (stepCount1 >= pattern1.length) {
-            updateStatus("U was te laat! Druk op 'Try Again'.", '#ff0000');
+            handleSuccessfulClick(dot1, currentPos1, `SUCCES: Blok 1 cyclus voltooid! (${score + 1}x)`);
+            startDot1Movement(); // Blok 1 cyclus reset
+        } else {
+            // Dit is nu minder kritisch, want falen wordt afgehandeld door moveDot1/2
+            updateStatus("Klik te vroeg of te laat (fout).", '#ffaa00');
+        }
+    };
+    
+    dot2.onclick = function() { // *** NIEUWE KLIK HANDLER VOOR BLOK 2 ***
+        if (isMoving2 && stepCount2 > 0 && stepCount2 < pattern2.length) {
+            handleSuccessfulClick(dot2, currentPos2, `SUCCES: Blok 2 cyclus voltooid! (${score + 1}x)`);
+            restartDot2Cycle(); // Blok 2 cyclus reset
+        } else {
+            updateStatus("Klik te vroeg of te laat (fout).", '#ffaa00');
         }
     };
 
-    // De Klik Handler (Op de knop)
     tryAgainBtn.onclick = function() {
         startDot1Movement();
+        if (dot2.style.display === 'block') {
+            initializeDot2(); // Herstart Blok 2 als deze al verschenen was
+        }
+        score = 0; // Reset score bij Try Again
+        scoreValue.textContent = score;
     };
 
-    // Initialisatie: Start het spel
+    // Initialisatie: Start alleen Blok 1
     startDot1Movement();
 </script>
 
