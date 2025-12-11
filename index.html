@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
-    <title>Converge MVP Test - Met Herstart</title>
+    <title>Converge MVP Test - Blokken en Verbeterde Klikbaarheid</title>
     <style>
         body {
             display: flex;
@@ -19,7 +19,7 @@
         #status-area {
             margin-bottom: 20px;
             font-size: 1.2em;
-            height: 25px; /* Vaste hoogte om verschuiving te voorkomen */
+            height: 25px;
             color: #00ff88;
         }
         #score-area {
@@ -35,23 +35,24 @@
             border: 1px solid #333;
             background-color: #111;
         }
+        /* --- AANGEPAST: Dit is nu een vierkant blok van 40x40px --- */
         .dot {
             position: absolute;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            cursor: pointer;
+            width: 40px; /* Groter gemaakt */
+            height: 40px; /* Groter gemaakt */
+            /* border-radius: 50%; <--- Verwijderd om er een vierkant van te maken */
+            cursor: pointer; 
             transition: background-color 0.1s, transform 0.1s;
-            z-index: 10;
+            z-index: 100; /* Z-index sterk verhoogd voor zekerheid */
         }
         #dot1 {
             background-color: #00ff88;
         }
+        /* --- AANGEPAST: Voetafdrukken zijn nu kleinere vierkantjes --- */
         .footprint {
             position: absolute;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
+            width: 15px; 
+            height: 15px; 
             background-color: #333;
             opacity: 0.5;
             z-index: 5;
@@ -65,7 +66,7 @@
             border: none;
             border-radius: 5px;
             margin-top: 15px;
-            display: none; /* Standaard verborgen */
+            display: none;
         }
     </style>
 </head>
@@ -109,6 +110,8 @@
     }
 
     function updateDotPosition(dotElement, gridX, gridY) {
+        // Coördinaten omrekenen naar pixels (center van de unit)
+        // Let op: dotElement.offsetWidth is nu 40px
         const left = (gridX * unitSize) - (dotElement.offsetWidth / 2);
         const top = (gridY * unitSize) - (dotElement.offsetHeight / 2);
         dotElement.style.left = `${left}px`;
@@ -119,6 +122,7 @@
         const fp = document.createElement('div');
         fp.className = 'footprint';
         container.appendChild(fp);
+        // Voetafdruk op dezelfde coördinaat als het midden van het blok
         const left = (x * unitSize) - (fp.offsetWidth / 2);
         const top = (y * unitSize) - (fp.offsetHeight / 2);
         fp.style.left = `${left}px`;
@@ -126,7 +130,6 @@
     }
 
     function startDot1Movement() {
-        // Zorg ervoor dat de knop verborgen is bij start/herstart
         tryAgainBtn.style.display = 'none'; 
         
         // Reset variabelen
@@ -137,10 +140,9 @@
 
         // Start beweging
         updateDotPosition(dot1, currentPos1.x, currentPos1.y);
-        // Wis eventuele oude interval en start de nieuwe
         clearInterval(intervalId1); 
         intervalId1 = setInterval(moveDot1, 500);
-        updateStatus("Punt 1 beweegt. Klik op tijd!", '#00ff88');
+        updateStatus("Blok 1 beweegt. Klik op tijd!", '#00ff88');
     }
 
     function failDot1() {
@@ -169,7 +171,7 @@
         updateDotPosition(dot1, currentPos1.x, currentPos1.y);
 
         stepCount1++;
-        updateStatus(`Punt 1 beweegt... Stap: ${stepCount1} van ${pattern1.length}`);
+        updateStatus(`Blok 1 beweegt... Stap: ${stepCount1} van ${pattern1.length}`);
 
         // Als 10 stappen zijn bereikt zonder klik: FAAL
         if (stepCount1 >= pattern1.length) {
@@ -177,26 +179,26 @@
         }
     }
 
-    // De Klik Handler (Op het punt)
+    // De Klik Handler (Op het blok)
     dot1.onclick = function() {
+        // We controleren of de punt beweegt en of de speler niet op de startpositie klikte (stap 0)
         if (isMoving1 && stepCount1 > 0 && stepCount1 < pattern1.length) {
             // Succesvolle klik!
             
             placeFootprint(currentPos1.x, currentPos1.y);
 
-            // 2. Reset de bewegingstimer en teller en start nieuwe cyclus
+            // Reset en start nieuwe cyclus
             clearInterval(intervalId1);
             score++;
             scoreValue.textContent = score;
             updateStatus(`SUCCES: Cyclus voltooid! (${score}x)`);
             
-            // Start nieuwe cyclus (reset)
             startDot1Movement(); 
 
             // **LOGICA VOOR PUNT 2 INTRODUCTIE**
             if (score === 3) { 
-                updateStatus("Introductie Punt 2! Maak je klaar.", '#ffaa00');
-                // initializeDot2(); // Functie voor punt 2 komt hier
+                updateStatus("Introductie Blok 2! Maak je klaar.", '#ffaa00');
+                // initializeDot2(); // Functie voor blok 2 komt hier
             }
         } else if (stepCount1 === 0) {
             updateStatus("Wacht tot de beweging start voordat u klikt!", '#ffaa00');
