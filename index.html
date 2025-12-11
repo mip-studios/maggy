@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
-    <title>Converge MVP Test - V9 Synergie & Feedback</title>
+    <title>Converge MVP Test - V11 Sequentieel</title>
     <style>
         body {
             display: flex;
@@ -15,6 +15,13 @@
             color: #fff;
             font-family: Arial, sans-serif;
             overflow: hidden;
+        }
+        #version-info { /* NIEUW: Versienummer */
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 1.0em;
+            color: #555;
         }
         #status-area {
             margin-bottom: 20px;
@@ -51,11 +58,9 @@
         #dot2 {
             background-color: #ffaa00; 
         }
-        /* De voetafdruk stijlen worden nu voornamelijk in JavaScript ingesteld */
-        .footprint {
-            position: absolute;
-            z-index: 5;
-        }
+        /* Voetafdrukken verwijderd uit dit concept */
+        .footprint { display: none; } 
+        
         #try-again-btn {
             padding: 10px 20px;
             font-size: 1.1em;
@@ -71,7 +76,7 @@
 </head>
 <body>
 
-<div id="score-area">Cyclus Voltooid: <span id="score-value">0</span></div>
+<div id="version-info">V11</div> <div id="score-area">Cyclus Voltooid: <span id="score-value">0</span></div>
 <div id="status-area">Wacht op beweging...</div>
 <div id="game-container">
     <div id="dot1" class="dot"></div>
@@ -91,31 +96,27 @@
     const unitSize = container.offsetWidth / gridSize;
     const movementSpeed = 750;
     
+    // --- STATE BEHEER ---
     let currentPos1 = { x: 5, y: 5 };
-    let currentPos2 = { x: 0, y: 0 }; 
+    let currentPos2 = { x: 2, y: 9 };
+    let activeDot = 1; // Start met Blok 1
     
     // --- PATRONEN DEFINITIE ---
-    // Blok 1: Pendelaar (10 stappen)
-    const pattern1 = [
-        { dx: 1, dy: 0 }, { dx: 0, dy: 1 },
-        { dx: -1, dy: 0 }, { dx: 0, dy: 1 },
-        { dx: 1, dy: 0 }, { dx: 0, dy: 1 },
-        { dx: -1, dy: 0 }, { dx: 0, dy: 1 },
+    // De patronen kunnen in de toekomst willekeurig worden geselecteerd uit een array
+    const pattern1 = [ // Groen: Pendelaar
+        { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 },
+        { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 },
         { dx: 1, dy: 0 }, { dx: 0, dy: 1 }
     ];
-    
-    // Blok 2: Spiraal (10 stappen)
-    const pattern2 = [ 
-        { dx: 2, dy: 0 }, { dx: 0, dy: -2 }, 
-        { dx: -2, dy: 0 }, { dx: 0, dy: -2 }, 
-        { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, 
-        { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, 
+    const pattern2 = [ // Oranje: Spiraal
+        { dx: 2, dy: 0 }, { dx: 0, dy: -2 }, { dx: -2, dy: 0 }, { dx: 0, dy: -2 }, 
+        { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, 
         { dx: 1, dy: 0 }, { dx: 0, dy: 0 } 
     ]; 
 
     let stepCount1 = 0;
     let stepCount2 = 0; 
-    let isMoving1 = true;
+    let isMoving1 = false;
     let isMoving2 = false; 
     let intervalId1;
     let intervalId2; 
@@ -124,7 +125,7 @@
     // --- HELPER FUNCTIES ---
 
     function updateStatus(message, color = '#00ff88') {
-        statusArea.innerHTML = message; // Gebruik innerHTML om de **bold** tags te renderen
+        statusArea.innerHTML = message;
         statusArea.style.color = color;
     }
 
@@ -135,88 +136,61 @@
         dotElement.style.top = `${top}px`;
     }
 
-    // Aangepaste functie om standaard of synergie voetafdruk te plaatsen
-    function placeFootprint(x, y, isSynergy = false) {
-        const fp = document.createElement('div');
-        fp.className = 'footprint';
-        
-        // Dynamische styling
-        if (isSynergy) {
-            fp.style.width = '25px';
-            fp.style.height = '25px';
-            fp.style.backgroundColor = '#00aaff'; // Blauw voor synergie
-            fp.style.opacity = '0.9';
-            fp.style.borderRadius = '50%'; // Rond
-            fp.style.zIndex = '50';
-        } else {
-            // Standaard voetafdruk (vierkant, donkergrijs)
-            fp.style.width = '15px';
-            fp.style.height = '15px';
-            fp.style.backgroundColor = '#333';
-            fp.style.opacity = '0.5';
-            fp.style.borderRadius = '0'; 
-            fp.style.zIndex = '5';
-        }
-
-        container.appendChild(fp);
-        // Positionering (gecentreerd op de grid-positie)
-        const left = (x * unitSize) - (fp.offsetWidth / 2);
-        const top = (y * unitSize) - (fp.offsetHeight / 2);
-        fp.style.left = `${left}px`;
-        fp.style.top = `${top}px`;
-    }
-
     function checkBoundaries(x, y) {
         x = Math.max(1, Math.min(gridSize, x));
         y = Math.max(1, Math.min(gridSize, y));
         return { x: x, y: y };
     }
 
-    // Functie voor visuele klik-feedback (verlengd naar 250ms)
     function clickFeedback(dotElement, originalColor) {
-        dotElement.style.backgroundColor = '#fff'; // Kort wit
+        dotElement.style.backgroundColor = '#fff';
         setTimeout(() => {
-            dotElement.style.backgroundColor = originalColor; // Terug naar origineel
-        }, 250); // Aangepast naar 250ms
+            dotElement.style.backgroundColor = originalColor;
+        }, 250); 
     }
+    
+    // (Verwijderd: placeFootprint)
 
     // --- CORE GAME LOGICA ---
-    
+
     function startDot1Movement() {
-        tryAgainBtn.style.display = 'none'; 
-        
-        currentPos1 = { x: 5, y: 5 };
+        // Stop alle bewegingen
+        clearInterval(intervalId2);
+        isMoving2 = false;
+        dot2.style.display = 'none';
+
+        // Start Dot 1
+        activeDot = 1;
         isMoving1 = true;
         stepCount1 = 0;
         dot1.style.backgroundColor = '#00ff88';
+        dot1.style.display = 'block';
 
         updateDotPosition(dot1, currentPos1.x, currentPos1.y);
         clearInterval(intervalId1); 
         intervalId1 = setInterval(moveDot1, movementSpeed);
-        updateStatus("Blok 1 beweegt. Klik op tijd!", '#00ff88');
+        updateStatus("Aan de beurt: Blok 1 (Groen). Klik op tijd!", '#00ff88');
     }
 
-    function initializeDot2() {
-        if(isMoving2) return; 
-
-        currentPos2 = { x: 2, y: 9 }; 
+    function startDot2Movement() {
+        // Stop alle bewegingen
+        clearInterval(intervalId1);
+        isMoving1 = false;
+        dot1.style.display = 'none';
+        
+        // Start Dot 2
+        activeDot = 2;
         isMoving2 = true;
         stepCount2 = 0;
         dot2.style.backgroundColor = '#ffaa00';
         dot2.style.display = 'block';
 
         updateDotPosition(dot2, currentPos2.x, currentPos2.y);
+        clearInterval(intervalId2); 
         intervalId2 = setInterval(moveDot2, movementSpeed);
-        updateStatus("Blok 2 verschenen! Beheer twee blokken.", '#ffaa00');
+        updateStatus("Aan de beurt: Blok 2 (Oranje). Klik op tijd!", '#ffaa00');
     }
 
-    function restartDot2Cycle() {
-        stepCount2 = 0;
-        isMoving2 = true;
-        dot2.style.backgroundColor = '#ffaa00'; 
-        clearInterval(intervalId2);
-        intervalId2 = setInterval(moveDot2, movementSpeed);
-    }
 
     function failGame() {
         clearInterval(intervalId1);
@@ -225,7 +199,7 @@
         isMoving2 = false;
         dot1.style.backgroundColor = '#ff0000'; 
         dot2.style.backgroundColor = '#ff0000'; 
-        updateStatus("MISLUKT: Een van de blokken was te laat! Druk op 'Try Again'.", '#ff0000');
+        updateStatus("MISLUKT: Tijd is om! Druk op 'Try Again'.", '#ff0000');
         tryAgainBtn.style.display = 'block';
     }
 
@@ -266,75 +240,44 @@
 
     // --- KLIK HANDLERS ---
 
-    function handleSuccessfulClick(dotElement, currentPos, cycleFinishedMessage) {
-        // 1. Visuele Feedback
-        clickFeedback(dotElement, dotElement.id === 'dot1' ? '#00ff88' : '#ffaa00');
-
-        // 2. Standaard Voetafdruk (op de plek van de klik)
-        placeFootprint(currentPos.x, currentPos.y, false); 
-        
-        // 3. Convergentie/Synergie Check (Bonus logica)
-        let bonusMessage = "";
-        if (isMoving1 && isMoving2) {
-            const dx = Math.abs(currentPos1.x - currentPos2.x);
-            const dy = Math.abs(currentPos1.y - currentPos2.y);
-            const manhattanDistance = dx + dy;
-            
-            // Drempelwaarde voor Synergie: Manhattan afstand <= 3
-            if (manhattanDistance <= 3) {
-                // Plaats de Synergie Voetafdruk (blauw) op de positie van het *andere* blok
-                const otherPos = (dotElement.id === 'dot1') ? currentPos2 : currentPos1;
-                placeFootprint(otherPos.x, otherPos.y, true); 
-                
-                score++; // Bonus score
-                bonusMessage = " | **SYNERGIE!** (Extra punt: " + score + "x)";
-            }
-        }
-        
-        // 4. Score en Status Update
-        score++;
-        scoreValue.textContent = score;
-        updateStatus(cycleFinishedMessage + bonusMessage, bonusMessage ? '#ff00ff' : '#00ff88');
-
-        // 5. Check of blok 2 gestart moet worden
-        if (dotElement.id === 'dot1' && score >= 3 && !isMoving2) { 
-            initializeDot2();
-        }
-    }
-
     dot1.onclick = function() {
         if (isMoving1 && stepCount1 > 0 && stepCount1 < pattern1.length) {
-            handleSuccessfulClick(dot1, currentPos1, `SUCCES: Blok 1 cyclus voltooid!`);
-            startDot1Movement(); // Blok 1 cyclus reset
+            clickFeedback(dot1, '#00ff88');
+            score++;
+            scoreValue.textContent = score;
+            updateStatus(`SUCCES! Blok 1 cyclus voltooid! (${score}x)`, '#00ff88');
+            
+            // Sequentieel: Start nu Blok 2
+            startDot2Movement(); 
         }
     };
     
     dot2.onclick = function() { 
         if (isMoving2 && stepCount2 > 0 && stepCount2 < pattern2.length) {
-            handleSuccessfulClick(dot2, currentPos2, `SUCCES: Blok 2 cyclus voltooid!`);
-            restartDot2Cycle(); // Blok 2 cyclus reset
+            clickFeedback(dot2, '#ffaa00');
+            score++;
+            scoreValue.textContent = score;
+            updateStatus(`SUCCES! Blok 2 cyclus voltooid! (${score}x)`, '#ffaa00');
+            
+            // Sequentieel: Start nu Blok 1
+            startDot1Movement(); 
         }
     };
 
     tryAgainBtn.onclick = function() {
-        container.querySelectorAll('.footprint').forEach(fp => fp.remove());
-        
-        startDot1Movement();
-        
-        if (dot2.style.display !== 'none') {
-            // Als Blok 2 al verschenen was, herstart het ook
-            initializeDot2();
-        } else {
-            // Anders, houd het verborgen
-            clearInterval(intervalId2); 
-            isMoving2 = false;
-        }
-
+        tryAgainBtn.style.display = 'none';
         score = 0;
         scoreValue.textContent = score;
+        
+        // Start het spel opnieuw met het blok dat faalde (actief was)
+        if (activeDot === 1) {
+            startDot1Movement();
+        } else if (activeDot === 2) {
+            startDot2Movement();
+        }
     };
 
-    // Initialisatie: Start alleen Blok 1
+    // Initialisatie: Start met Blok 1
     startDot1Movement();
 </script>
 
