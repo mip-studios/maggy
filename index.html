@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
-    <title>Converge MVP Test - V11 Sequentieel</title>
+    <title>Converge MVP Test - V12 Patroon Geheugen & Geel Blok</title>
     <style>
         body {
             display: flex;
@@ -16,12 +16,18 @@
             font-family: Arial, sans-serif;
             overflow: hidden;
         }
-        #version-info { /* NIEUW: Versienummer */
+        #version-info { 
             position: absolute;
             top: 20px;
             left: 20px;
             font-size: 1.0em;
             color: #555;
+        }
+        #mode-toggle { /* NIEUW: Schakelaar voor Einstein Mode */
+            position: absolute;
+            top: 40px;
+            left: 20px;
+            font-size: 0.9em;
         }
         #status-area {
             margin-bottom: 20px;
@@ -51,14 +57,10 @@
             z-index: 100;
             display: none; 
         }
-        #dot1 {
-            background-color: #00ff88; 
-            display: block; 
-        }
-        #dot2 {
-            background-color: #ffaa00; 
-        }
-        /* Voetafdrukken verwijderd uit dit concept */
+        #dot1 { background-color: #00ff88; } /* Groen */
+        #dot2 { background-color: #ffaa00; } /* Oranje */
+        #dot3 { background-color: #ffff00; } /* NIEUW: Geel */
+
         .footprint { display: none; } 
         
         #try-again-btn {
@@ -76,53 +78,120 @@
 </head>
 <body>
 
-<div id="version-info">V11</div> <div id="score-area">Cyclus Voltooid: <span id="score-value">0</span></div>
+<div id="version-info">V12</div>
+<div id="mode-toggle">
+    <input type="checkbox" id="einstein-mode">
+    <label for="einstein-mode">Einstein Mode</label>
+</div>
+<div id="score-area">Cyclus Voltooid: <span id="score-value">0</span></div>
 <div id="status-area">Wacht op beweging...</div>
 <div id="game-container">
     <div id="dot1" class="dot"></div>
     <div id="dot2" class="dot"></div>
-</div>
+    <div id="dot3" class="dot"></div> </div>
 <button id="try-again-btn">Try Again</button>
 
 <script>
     const container = document.getElementById('game-container');
     const dot1 = document.getElementById('dot1');
     const dot2 = document.getElementById('dot2');
+    const dot3 = document.getElementById('dot3'); // NIEUW
     const scoreValue = document.getElementById('score-value');
     const statusArea = document.getElementById('status-area');
     const tryAgainBtn = document.getElementById('try-again-btn');
+    const einsteinMode = document.getElementById('einstein-mode');
     
     const gridSize = 10; 
     const unitSize = container.offsetWidth / gridSize;
     const movementSpeed = 750;
     
-    // --- STATE BEHEER ---
-    let currentPos1 = { x: 5, y: 5 };
-    let currentPos2 = { x: 2, y: 9 };
-    let activeDot = 1; // Start met Blok 1
+    // --- PATRONEN EN STARTPOSITIES ---
     
-    // --- PATRONEN DEFINITIE ---
-    // De patronen kunnen in de toekomst willekeurig worden geselecteerd uit een array
-    const pattern1 = [ // Groen: Pendelaar
-        { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 },
-        { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 },
-        { dx: 1, dy: 0 }, { dx: 0, dy: 1 }
+    // 1. Mogelijke Patronen
+    const PATTERNS = [
+        // Patroon 1: Pendelaar
+        [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 },
+         { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 },
+         { dx: 1, dy: 0 }, { dx: 0, dy: 1 }],
+        // Patroon 2: Spiraal
+        [{ dx: 2, dy: 0 }, { dx: 0, dy: -2 }, { dx: -2, dy: 0 }, { dx: 0, dy: -2 }, 
+         { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, 
+         { dx: 1, dy: 0 }, { dx: 0, dy: 0 }],
+        // Patroon 3: Diagonaal/Vierkant (10 stappen)
+        [{ dx: 1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: -1 }, { dx: -1, dy: 1 },
+         { dx: 1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: -1 }, { dx: -1, dy: 1 },
+         { dx: 1, dy: 1 }, { dx: 0, dy: 0 }],
+        // Patroon 4: Kleine Cirkel (8 stappen - wordt 10)
+        [{ dx: 0, dy: 1 }, { dx: 1, dy: 0 }, { dx: 0, dy: -1 }, { dx: -1, dy: 0 },
+         { dx: 0, dy: 1 }, { dx: 1, dy: 0 }, { dx: 0, dy: 0 }, { dx: 0, dy: 0 }, 
+         { dx: 0, dy: 0 }, { dx: 0, dy: 0 }]
     ];
-    const pattern2 = [ // Oranje: Spiraal
-        { dx: 2, dy: 0 }, { dx: 0, dy: -2 }, { dx: -2, dy: 0 }, { dx: 0, dy: -2 }, 
-        { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, 
-        { dx: 1, dy: 0 }, { dx: 0, dy: 0 } 
-    ]; 
 
+    // 2. Mogelijke Startposities (grid 1-10)
+    const START_POSITIONS = [
+        { x: 5, y: 5 }, { x: 2, y: 9 }, { x: 8, y: 3 }, { x: 1, y: 1 }, { x: 10, y: 10 }
+    ];
+
+    // 3. OPGESLAGEN (BEWAARDE) PATRONEN en Posities
+    let savedPattern1 = [];
+    let savedStartPos1 = { x: 5, y: 5 };
+    let savedPattern2 = [];
+    let savedStartPos2 = { x: 2, y: 9 };
+    let savedPattern3 = [];
+    let savedStartPos3 = { x: 8, y: 3 };
+
+    // --- STATE BEHEER ---
+    let activeDot = 1;
     let stepCount1 = 0;
     let stepCount2 = 0; 
+    let stepCount3 = 0; // NIEUW
     let isMoving1 = false;
     let isMoving2 = false; 
+    let isMoving3 = false; // NIEUW
     let intervalId1;
     let intervalId2; 
+    let intervalId3; // NIEUW
     let score = 0;
 
+    // --- INITIALISATIE & RESET LOGICA ---
+
+    function initializeGame() {
+        // Stop alle timers
+        clearInterval(intervalId1);
+        clearInterval(intervalId2);
+        clearInterval(intervalId3);
+        
+        // 1. Willekeurige patronen en posities selecteren en opslaan
+        
+        // Groen: Willekeurige start, willekeurig patroon
+        const randIndex1 = Math.floor(Math.random() * PATTERNS.length);
+        const randPosIndex1 = Math.floor(Math.random() * START_POSITIONS.length);
+        savedPattern1 = PATTERNS[randIndex1];
+        savedStartPos1 = START_POSITIONS[randPosIndex1];
+        
+        // Oranje: Willekeurige start, willekeurig patroon
+        const randIndex2 = Math.floor(Math.random() * PATTERNS.length);
+        const randPosIndex2 = Math.floor(Math.random() * START_POSITIONS.length);
+        savedPattern2 = PATTERNS[randIndex2];
+        savedStartPos2 = START_POSITIONS[randPosIndex2];
+
+        // Geel: Willekeurige start, willekeurig patroon
+        const randIndex3 = Math.floor(Math.random() * PATTERNS.length);
+        const randPosIndex3 = Math.floor(Math.random() * START_POSITIONS.length);
+        savedPattern3 = PATTERNS[randIndex3];
+        savedStartPos3 = START_POSITIONS[randPosIndex3];
+
+        // Reset state
+        score = 0;
+        scoreValue.textContent = score;
+        activeDot = 1; // Start altijd met Groen
+        
+        // Start de eerste cyclus
+        startDot1Movement();
+    }
+
     // --- HELPER FUNCTIES ---
+    // (updateStatus, updateDotPosition, checkBoundaries, clickFeedback blijven hetzelfde)
 
     function updateStatus(message, color = '#00ff88') {
         statusArea.innerHTML = message;
@@ -148,68 +217,57 @@
             dotElement.style.backgroundColor = originalColor;
         }, 250); 
     }
-    
-    // (Verwijderd: placeFootprint)
 
-    // --- CORE GAME LOGICA ---
+    // --- START FUNCTIES VOOR ELK BLOK ---
 
-    function startDot1Movement() {
-        // Stop alle bewegingen
-        clearInterval(intervalId2);
-        isMoving2 = false;
-        dot2.style.display = 'none';
-
-        // Start Dot 1
-        activeDot = 1;
-        isMoving1 = true;
-        stepCount1 = 0;
-        dot1.style.backgroundColor = '#00ff88';
-        dot1.style.display = 'block';
-
-        updateDotPosition(dot1, currentPos1.x, currentPos1.y);
-        clearInterval(intervalId1); 
-        intervalId1 = setInterval(moveDot1, movementSpeed);
-        updateStatus("Aan de beurt: Blok 1 (Groen). Klik op tijd!", '#00ff88');
-    }
-
-    function startDot2Movement() {
-        // Stop alle bewegingen
+    function startDotMovement(dot, startPos, pattern, color, dotIndex, intervalIdRef) {
+        // Stop alle blokken
+        [dot1, dot2, dot3].forEach(d => d.style.display = 'none');
+        isMoving1 = isMoving2 = isMoving3 = false;
         clearInterval(intervalId1);
-        isMoving1 = false;
-        dot1.style.display = 'none';
+        clearInterval(intervalId2);
+        clearInterval(intervalId3);
+
+        // Start de actieve blok
+        activeDot = dotIndex;
         
-        // Start Dot 2
-        activeDot = 2;
-        isMoving2 = true;
-        stepCount2 = 0;
-        dot2.style.backgroundColor = '#ffaa00';
-        dot2.style.display = 'block';
+        if (dotIndex === 1) { currentPos1 = { ...startPos }; isMoving1 = true; stepCount1 = 0; }
+        if (dotIndex === 2) { currentPos2 = { ...startPos }; isMoving2 = true; stepCount2 = 0; }
+        if (dotIndex === 3) { currentPos3 = { ...startPos }; isMoving3 = true; stepCount3 = 0; } // NIEUW
+        
+        dot.style.backgroundColor = color;
+        dot.style.display = 'block';
 
-        updateDotPosition(dot2, currentPos2.x, currentPos2.y);
-        clearInterval(intervalId2); 
-        intervalId2 = setInterval(moveDot2, movementSpeed);
-        updateStatus("Aan de beurt: Blok 2 (Oranje). Klik op tijd!", '#ffaa00');
+        updateDotPosition(dot, startPos.x, startPos.y);
+        
+        // De bewegingslus wordt hieronder gedefinieerd om de juiste patroon/state te gebruiken
+        const moveFunction = (dotIndex === 1) ? moveDot1 : 
+                             (dotIndex === 2) ? moveDot2 : moveDot3;
+        
+        return setInterval(moveFunction, movementSpeed);
+    }
+    
+    // Publieke startfuncties die de opgeslagen patronen gebruiken
+    function startDot1Movement() {
+        intervalId1 = startDotMovement(dot1, savedStartPos1, savedPattern1, '#00ff88', 1, intervalId1);
+        updateStatus("Aan de beurt: Blok 1 (Groen). Onthoud het patroon!", '#00ff88');
+    }
+    function startDot2Movement() {
+        intervalId2 = startDotMovement(dot2, savedStartPos2, savedPattern2, '#ffaa00', 2, intervalId2);
+        updateStatus("Aan de beurt: Blok 2 (Oranje). Onthoud het patroon!", '#ffaa00');
+    }
+    function startDot3Movement() { // NIEUW
+        intervalId3 = startDotMovement(dot3, savedStartPos3, savedPattern3, '#ffff00', 3, intervalId3);
+        updateStatus("Aan de beurt: Blok 3 (Geel). Onthoud het patroon!", '#ffff00');
     }
 
-
-    function failGame() {
-        clearInterval(intervalId1);
-        clearInterval(intervalId2);
-        isMoving1 = false;
-        isMoving2 = false;
-        dot1.style.backgroundColor = '#ff0000'; 
-        dot2.style.backgroundColor = '#ff0000'; 
-        updateStatus("MISLUKT: Tijd is om! Druk op 'Try Again'.", '#ff0000');
-        tryAgainBtn.style.display = 'block';
-    }
-
-
-    // --- BEWEGINGSLUSSEN ---
+    // --- BEWEGINGSLUSSEN (Gebruiken nu de bewaarde patronen) ---
 
     function moveDot1() {
         if (!isMoving1) return;
-
-        const step = pattern1[stepCount1 % pattern1.length];
+        const pattern = savedPattern1;
+        
+        const step = pattern[stepCount1 % pattern.length];
         
         let newPos = checkBoundaries(currentPos1.x + step.dx, currentPos1.y + step.dy);
         currentPos1 = newPos;
@@ -217,15 +275,16 @@
 
         stepCount1++;
 
-        if (stepCount1 >= pattern1.length) {
+        if (stepCount1 >= pattern.length) {
             failGame();
         }
     }
 
     function moveDot2() { 
         if (!isMoving2) return;
+        const pattern = savedPattern2;
 
-        const step = pattern2[stepCount2 % pattern2.length];
+        const step = pattern[stepCount2 % pattern.length];
         
         let newPos = checkBoundaries(currentPos2.x + step.dx, currentPos2.y + step.dy);
         currentPos2 = newPos;
@@ -233,52 +292,79 @@
 
         stepCount2++;
 
-        if (stepCount2 >= pattern2.length) {
+        if (stepCount2 >= pattern.length) {
+            failGame();
+        }
+    }
+    
+    function moveDot3() { // NIEUW
+        if (!isMoving3) return;
+        const pattern = savedPattern3;
+        
+        const step = pattern[stepCount3 % pattern.length];
+        
+        let newPos = checkBoundaries(currentPos3.x + step.dx, currentPos3.y + step.dy);
+        currentPos3 = newPos;
+        updateDotPosition(dot3, currentPos3.x, currentPos3.y);
+
+        stepCount3++;
+
+        if (stepCount3 >= pattern.length) {
             failGame();
         }
     }
 
-    // --- KLIK HANDLERS ---
+    // --- KLIK HANDLERS & SEQUENTIELE FLOW ---
 
     dot1.onclick = function() {
-        if (isMoving1 && stepCount1 > 0 && stepCount1 < pattern1.length) {
+        if (isMoving1 && stepCount1 > 0 && stepCount1 < savedPattern1.length) {
             clickFeedback(dot1, '#00ff88');
             score++;
             scoreValue.textContent = score;
-            updateStatus(`SUCCES! Blok 1 cyclus voltooid! (${score}x)`, '#00ff88');
-            
-            // Sequentieel: Start nu Blok 2
-            startDot2Movement(); 
+            startDot2Movement(); // Groen -> Oranje
         }
     };
     
     dot2.onclick = function() { 
-        if (isMoving2 && stepCount2 > 0 && stepCount2 < pattern2.length) {
+        if (isMoving2 && stepCount2 > 0 && stepCount2 < savedPattern2.length) {
             clickFeedback(dot2, '#ffaa00');
             score++;
             scoreValue.textContent = score;
-            updateStatus(`SUCCES! Blok 2 cyclus voltooid! (${score}x)`, '#ffaa00');
-            
-            // Sequentieel: Start nu Blok 1
-            startDot1Movement(); 
+            startDot3Movement(); // Oranje -> Geel
         }
     };
+    
+    dot3.onclick = function() { // NIEUW
+        if (isMoving3 && stepCount3 > 0 && stepCount3 < savedPattern3.length) {
+            clickFeedback(dot3, '#ffff00');
+            score++;
+            scoreValue.textContent = score;
+            startDot1Movement(); // Geel -> Groen (cyclus gesloten)
+        }
+    };
+
+    // --- RESET LOGICA (Einstein Mode) ---
 
     tryAgainBtn.onclick = function() {
-        tryAgainBtn.style.display = 'none';
-        score = 0;
-        scoreValue.textContent = score;
-        
-        // Start het spel opnieuw met het blok dat faalde (actief was)
-        if (activeDot === 1) {
-            startDot1Movement();
-        } else if (activeDot === 2) {
-            startDot2Movement();
+        if (einsteinMode.checked) {
+            // Einstein Mode: Begin totaal opnieuw met nieuwe willekeurige patronen
+            updateStatus("Einstein Mode: Nieuwe patronen geladen!", '#ff00ff');
+            initializeGame(); 
+        } else {
+            // Normale Mode: Herstart de cyclus met de OPGESLAGEN patronen
+            tryAgainBtn.style.display = 'none';
+            score = 0;
+            scoreValue.textContent = score;
+            
+            // Start het blok dat aan de beurt was
+            if (activeDot === 1) startDot1Movement();
+            else if (activeDot === 2) startDot2Movement();
+            else if (activeDot === 3) startDot3Movement();
         }
     };
 
-    // Initialisatie: Start met Blok 1
-    startDot1Movement();
+    // Initialisatie van het spel
+    initializeGame();
 </script>
 
 </body>
