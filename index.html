@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
-    <title>Converge MVP Test - V750ms + Blok 2 Fix</title>
+    <title>Converge MVP Test - V8 Fixes</title>
     <style>
         body {
             display: flex;
@@ -92,13 +92,13 @@
     
     const gridSize = 10; 
     const unitSize = container.offsetWidth / gridSize;
-    const movementSpeed = 750; // Aangepast naar 750ms
+    const movementSpeed = 750;
     
     let currentPos1 = { x: 5, y: 5 };
     let currentPos2 = { x: 0, y: 0 }; 
     
     // --- PATRONEN DEFINITIE ---
-    // Blok 1: Pendelaar
+    // Blok 1: Pendelaar (10 stappen)
     const pattern1 = [
         { dx: 1, dy: 0 }, { dx: 0, dy: 1 },
         { dx: -1, dy: 0 }, { dx: 0, dy: 1 },
@@ -107,12 +107,12 @@
         { dx: 1, dy: 0 }, { dx: 0, dy: 1 }
     ];
     
-    // Blok 2: Spiraal (10 stappen) - DE SYNTAX FOUT IS HIER HERSTELD
+    // Blok 2: Spiraal (10 stappen) - GECORRIGEERD om binnen de grenzen te blijven
     const pattern2 = [ 
-        { dx: 2, dy: 0 }, { dx: 0, dy: -1 }, 
-        { dx: -1, dy: 0 }, { dx: 0, dy: -1 }, 
-        { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, 
-        { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, 
+        { dx: 2, dy: 0 }, { dx: 0, dy: -2 }, // Start: (2,9) -> (4,9) -> (4,7)
+        { dx: -2, dy: 0 }, { dx: 0, dy: -2 }, // -> (2,7) -> (2,5)
+        { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, // -> (1,5) -> (1,6)
+        { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, // -> (2,6) -> (2,7)
         { dx: 1, dy: 0 }, { dx: 0, dy: 0 } 
     ]; 
 
@@ -152,6 +152,14 @@
         x = Math.max(1, Math.min(gridSize, x));
         y = Math.max(1, Math.min(gridSize, y));
         return { x: x, y: y };
+    }
+
+    // Functie voor visuele klik-feedback
+    function clickFeedback(dotElement, originalColor) {
+        dotElement.style.backgroundColor = '#fff'; // Kort wit
+        setTimeout(() => {
+            dotElement.style.backgroundColor = originalColor; // Terug naar origineel
+        }, 100);
     }
 
     // --- CORE GAME LOGICA ---
@@ -216,7 +224,6 @@
         updateDotPosition(dot1, currentPos1.x, currentPos1.y);
 
         stepCount1++;
-        // updateStatus(`Blok 1: ${stepCount1}, Blok 2: ${stepCount2}`);
 
         if (stepCount1 >= pattern1.length) {
             failGame();
@@ -233,8 +240,8 @@
         updateDotPosition(dot2, currentPos2.x, currentPos2.y);
 
         stepCount2++;
-        // updateStatus(`Blok 1: ${stepCount1}, Blok 2: ${stepCount2}`);
 
+        // ** Fix: Gebruik de totale lengte van het patroon om te falen **
         if (stepCount2 >= pattern2.length) {
             failGame();
         }
@@ -244,6 +251,7 @@
 
     function handleSuccessfulClick(dotElement, currentPos, cycleFinishedMessage) {
         placeFootprint(currentPos.x, currentPos.y);
+        clickFeedback(dotElement, dotElement.id === 'dot1' ? '#00ff88' : '#ffaa00');
         
         // Hier komt straks de Convergentie/Synergie check!
         
@@ -251,7 +259,6 @@
         scoreValue.textContent = score;
         updateStatus(cycleFinishedMessage, '#00ff88');
 
-        // Check of blok 2 gestart moet worden na de klik van blok 1
         if (dotElement.id === 'dot1' && score === 3 && !isMoving2) { 
             initializeDot2();
         }
@@ -261,8 +268,6 @@
         if (isMoving1 && stepCount1 > 0 && stepCount1 < pattern1.length) {
             handleSuccessfulClick(dot1, currentPos1, `SUCCES: Blok 1 cyclus voltooid! (${score + 1}x)`);
             startDot1Movement(); // Blok 1 cyclus reset
-        } else {
-            updateStatus("Klik te vroeg of te laat (fout).", '#ffaa00');
         }
     };
     
@@ -270,22 +275,17 @@
         if (isMoving2 && stepCount2 > 0 && stepCount2 < pattern2.length) {
             handleSuccessfulClick(dot2, currentPos2, `SUCCES: Blok 2 cyclus voltooid! (${score + 1}x)`);
             restartDot2Cycle(); // Blok 2 cyclus reset
-        } else {
-            updateStatus("Klik te vroeg of te laat (fout).", '#ffaa00');
         }
     };
 
     tryAgainBtn.onclick = function() {
-        // Verwijder alle voetafdrukken
         container.querySelectorAll('.footprint').forEach(fp => fp.remove());
         
         startDot1Movement();
         
-        // Herstart Blok 2 alleen als deze al eerder in het spel verscheen
         if (dot2.style.display !== 'none') {
             initializeDot2();
         } else {
-            // Zorg ervoor dat Blok 2 verborgen blijft als het spel nog niet zover was
             clearInterval(intervalId2); 
             isMoving2 = false;
         }
