@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
-    <title>Converge MVP Test - V14 Stabiliteit Fix</title>
+    <title>Converge MVP Test - V15 Willekeurige Timing</title>
     <style>
         body {
             display: flex;
@@ -43,6 +43,16 @@
             color: #fff;
             opacity: 0.8;
             pointer-events: none; 
+        }
+        #timing-cue { /* NIEUW: Voor de willekeurige klikstap */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 5em;
+            color: #fff;
+            z-index: 200;
+            display: none;
         }
         #score-area {
             position: absolute;
@@ -87,12 +97,12 @@
 </head>
 <body>
 
-<div id="version-info">V14</div>
+<div id="version-info">V15</div>
 <div id="mode-toggle">
     <input type="checkbox" id="einstein-mode">
     <label for="einstein-mode">Einstein Mode</label>
 </div>
-<div id="cycle-counter"></div>
+<div id="timing-cue"></div> <div id="cycle-counter"></div>
 <div id="score-area">Cyclus Voltooid: <span id="score-value">0</span></div>
 <div id="status-area">Wacht op beweging...</div>
 <div id="game-container">
@@ -112,24 +122,28 @@
     const tryAgainBtn = document.getElementById('try-again-btn');
     const einsteinMode = document.getElementById('einstein-mode');
     const cycleCounter = document.getElementById('cycle-counter');
+    const timingCue = document.getElementById('timing-cue'); // NIEUW
     
     const gridSize = 10; 
     const unitSize = container.offsetWidth / gridSize;
     const movementSpeed = 750;
     const CLICKS_PER_CYCLE = 3; 
+    const MAX_STEPS = 10; // Maximale lengte van elk patroon
     
     // --- PATRONEN EN STARTPOSITIES ---
+    // Alle patronen zijn nu 10 stappen lang.
     const PATTERNS = [
         [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 0 }, { dx: 0, dy: 0 }], 
         [{ dx: 2, dy: 0 }, { dx: 0, dy: -2 }, { dx: -2, dy: 0 }, { dx: 0, dy: -2 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 0 }, { dx: 0, dy: 0 }],
         [{ dx: 1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: -1 }, { dx: -1, dy: 1 }, { dx: 1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: -1 }, { dx: -1, dy: 1 }, { dx: 1, dy: 1 }, { dx: 0, dy: 0 }],
-        [{ dx: 0, dy: 1 }, { dx: 1, dy: 0 }, { dx: 0, dy: -1 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 0 }, { dx: 0, dy: 0 }, { dx: 0, dy: 0 }, { dx: 0, dy: 0 }, { dx: 0, dy: 0 }]
+        [{ dx: 0, dy: 1 }, { dx: 1, dy: 0 }, { dx: 0, dy: -1 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 0 }, { dx: 0, dy: -1 }, { dx: -1, dy: 0 }, { dx: 0, dy: 0 }, { dx: 0, dy: 0 }]
     ];
     const START_POSITIONS = [{ x: 5, y: 5 }, { x: 2, y: 9 }, { x: 8, y: 3 }, { x: 1, y: 1 }, { x: 10, y: 10 }];
 
-    // --- OPGESLAGEN STATE ---
+    // --- OPGESLAGEN STATE (Patronen en Start/Klik stappen) ---
     let savedPattern = { 1: [], 2: [], 3: [] }; 
     let savedStartPos = { 1: { x: 0, y: 0 }, 2: { x: 0, y: 0 }, 3: { x: 0, y: 0 } };
+    let savedClickStep = { 1: 0, 2: 0, 3: 0 }; // NIEUW: De willekeurige stap waarop geklikt moet worden
 
     // --- ACTUELE STATE ---
     let currentPos = { 1: { x: 0, y: 0 }, 2: { x: 0, y: 0 }, 3: { x: 0, y: 0 } }; 
@@ -145,12 +159,16 @@
     function initializeGame() {
         Object.values(intervalId).forEach(clearInterval);
         
-        // 1. Willekeurige patronen en posities selecteren en opslaan
+        // 1. Willekeurige patronen, posities en KLIK-STAPPEN selecteren en opslaan
         for (let i = 1; i <= 3; i++) {
             const randPatternIndex = Math.floor(Math.random() * PATTERNS.length);
             const randPosIndex = Math.floor(Math.random() * START_POSITIONS.length);
+            
             savedPattern[i] = PATTERNS[randPatternIndex];
             savedStartPos[i] = { ...START_POSITIONS[randPosIndex] };
+            
+            // Willekeurige klikstap tussen 2 en 9 (stap 1 is na de eerste beweging)
+            savedClickStep[i] = Math.floor(Math.random() * 8) + 2; 
         }
 
         score = 0;
@@ -158,9 +176,10 @@
         activeDot = 1;
         cycleCount = { 1: 0, 2: 0, 3: 0 };
         
-        startDotMovement(1);
+        // Eerst de cue laten zien, daarna pas de beweging starten
+        showTimingCue(1);
     }
-
+    
     // --- HELPER FUNCTIES ---
 
     function updateStatus(message, color = '#00ff88') {
@@ -196,17 +215,32 @@
             dotElement.style.backgroundColor = originalColor;
         }, 250); 
     }
-
-    // --- START FUNCTIES VOOR ELK BLOK ---
-
-    function startDotMovement(dotIndex) {
-        // 1. Reset/Stop andere blokken
+    
+    // NIEUW: Toon de willekeurige klikstap
+    function showTimingCue(dotIndex) {
         Object.values(intervalId).forEach(clearInterval);
         isMoving = { 1: false, 2: false, 3: false };
         [dot1, dot2, dot3].forEach(d => d.style.display = 'none');
         cycleCounter.textContent = '';
+        tryAgainBtn.style.display = 'none';
 
-        // 2. State instellen voor actieve blok
+        const step = savedClickStep[dotIndex];
+        timingCue.textContent = step;
+        timingCue.style.display = 'block';
+        
+        // Wacht 1.5 seconde, dan start de beweging
+        setTimeout(() => {
+            timingCue.style.display = 'none';
+            startDotMovement(dotIndex);
+        }, 1500); 
+    }
+
+    // --- START FUNCTIES VOOR ELK BLOK ---
+
+    function startDotMovement(dotIndex) {
+        // Alleen de actieve blok moet opnieuw gestart worden, de rest is al gestopt
+        clearInterval(intervalId[dotIndex]);
+        
         activeDot = dotIndex;
         currentPos[dotIndex] = { ...savedStartPos[dotIndex] }; // Reset naar STARTPOS
         stepCount[dotIndex] = 0;
@@ -216,25 +250,24 @@
         const color = (dotIndex === 1) ? '#00ff88' : (dotIndex === 2) ? '#ffaa00' : '#ffff00';
         const name = (dotIndex === 1) ? 'Groen' : (dotIndex === 2) ? 'Oranje' : 'Geel';
         
-        // 3. Eerste positionering
         dot.style.backgroundColor = color;
         dot.style.display = 'block';
         updateDotPosition(dot, currentPos[dotIndex].x, currentPos[dotIndex].y);
         
-        // 4. Start de timer
         intervalId[dotIndex] = setInterval(createMoveDotFunction(dotIndex), movementSpeed);
         
+        const requiredStep = savedClickStep[dotIndex];
         updateCycleCounter(dotIndex);
-        updateStatus(`Aan de beurt: Blok ${dotIndex} (${name}). Clicks nodig: ${CLICKS_PER_CYCLE - cycleCount[dotIndex]}`, color);
+        updateStatus(`Aan de beurt: Blok ${dotIndex} (${name}). KLIK op stap ${requiredStep}.`, color);
     }
     
-    function failGame() {
+    function failGame(reason) {
         Object.values(intervalId).forEach(clearInterval);
         isMoving = { 1: false, 2: false, 3: false };
         dot1.style.backgroundColor = dot2.style.backgroundColor = dot3.style.backgroundColor = '#ff0000'; 
         cycleCounter.textContent = '';
-        updateStatus("MISLUKT: Tijd is om! Druk op 'Try Again'.", '#ff0000');
         tryAgainBtn.style.display = 'block';
+        updateStatus(`MISLUKT (${reason})! Druk op 'Try Again'.`, '#ff0000');
     }
 
 
@@ -245,10 +278,17 @@
             if (!isMoving[dotIndex]) return;
 
             const pattern = savedPattern[dotIndex];
+            const requiredStep = savedClickStep[dotIndex];
+
+            // 1. CHECK OP TE LAAT: Als de stap het vereiste moment bereikt
+            if (stepCount[dotIndex] === requiredStep) {
+                failGame("Te laat geklikt");
+                return;
+            }
             
-            // CHECK OP FALEN: Als de huidige stap de totale lengte bereikt, is de tijd om.
-            if (stepCount[dotIndex] >= pattern.length) {
-                failGame();
+            // 2. CHECK OP PATROONEINDE (Veiligheid): Als het patroon is afgelopen
+            if (stepCount[dotIndex] >= MAX_STEPS) {
+                failGame("Patroon voltooid zonder actie");
                 return;
             }
 
@@ -267,22 +307,34 @@
     // --- KLIK HANDLERS & SEQUENTIELE FLOW ---
 
     function handleSuccessfulClick(dotIndex, dotElement, originalColor, nextDotIndex) {
-        // Controleer of het de juiste, bewegende dot is en of het niet de eerste stap (0) is
-        if (!isMoving[dotIndex] || stepCount[dotIndex] === 0 || stepCount[dotIndex] > savedPattern[dotIndex].length) return;
+        // 1. Controleer of de juiste dot beweegt
+        if (!isMoving[dotIndex]) return;
 
+        const currentStep = stepCount[dotIndex];
+        const requiredStep = savedClickStep[dotIndex];
+
+        // 2. FALEN: Te vroeg of te laat geklikt
+        if (currentStep !== requiredStep) {
+            failGame(`Geklikt op stap ${currentStep}, vereist was ${requiredStep}`);
+            return;
+        }
+        
+        // 3. SUCCES
         clickFeedback(dotElement, originalColor);
         score++;
         scoreValue.textContent = score;
         cycleCount[dotIndex]++;
 
+        const name = (dotIndex === 1) ? 'Groen' : (dotIndex === 2) ? 'Oranje' : 'Geel';
+        updateStatus(`GOED! Klik op stap ${requiredStep} gelukt. Clicks over: ${CLICKS_PER_CYCLE - cycleCount[dotIndex]}`, originalColor);
         
         if (cycleCount[dotIndex] >= CLICKS_PER_CYCLE) {
-            // 1. Cyclus voltooid (3 clicks), ga naar volgend blok
-            cycleCount[dotIndex] = 0; // Reset de teller voor dit blok
-            startDotMovement(nextDotIndex);
+            // Cyclus voltooid (3 clicks), ga naar volgend blok
+            cycleCount[dotIndex] = 0; 
+            showTimingCue(nextDotIndex);
         } else {
-            // 2. Start de cyclus van dit blok opnieuw (nieuwe beweging, zelfde patroon)
-            startDotMovement(dotIndex);
+            // Start de cyclus van dit blok opnieuw (zelfde patroon, maar nieuwe beweging)
+            showTimingCue(dotIndex);
         }
     }
 
@@ -302,8 +354,6 @@
     // --- RESET LOGICA ---
 
     tryAgainBtn.onclick = function() {
-        tryAgainBtn.style.display = 'none';
-
         if (einsteinMode.checked) {
             // Einstein Mode: Nieuwe patronen en volledig gereset
             updateStatus("Einstein Mode: Nieuwe patronen geladen!", '#ff00ff');
@@ -312,10 +362,10 @@
             // Normale Mode: Herstart de actieve cyclus met de OPGESLAGEN patronen
             score = 0;
             scoreValue.textContent = score;
-            cycleCount = { 1: 0, 2: 0, 3: 0 }; // Volledige cyclus reset
+            cycleCount = { 1: 0, 2: 0, 3: 0 }; 
             
-            // Start het blok dat als laatste actief was
-            startDotMovement(activeDot);
+            // Start met het tonen van de timing cue van de laatst actieve dot
+            showTimingCue(activeDot);
         }
     };
 
